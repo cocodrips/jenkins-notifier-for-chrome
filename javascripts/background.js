@@ -1,151 +1,57 @@
+var lastTime = $.now();
+
 $(function(){
-    var apiUrl = localStorage["jenkins-url"];
-    var jobName = localStorage["job-name"];
-    var useWebsocket   = localStorage["use-websocket"];
-    var websocketUrl   = localStorage["websocket-url"];
-    var notifyOnlyFail = localStorage["notify-only-fail"];
-
-    if (apiUrl == null || jobName == null || (useWebsocket == 'true' && websocketUrl == null)) {
-        return;
-    }
-
-    apiUrl = appendLastSlash(apiUrl);
-    var prevBuild = -1;
-    var JOB = "job/"
-    var BUILD_NUMBER = "lastBuild"
-    var API_SUB  = "/api/json";
-    var POLLING_TIME = 60 * 1000;
-
-    $.ajaxSetup({
-        "error": function() {
-            var option = {
-                type: 'basic',
-                title: "Failed to access to Jenkins",
-                iconUrl: getIcon("FAILURE"),
-                message : apiUrl
-            }
-            chrome.notifications.create("", option, function (id) { /* Do nothing */ });
-        }
-    });
-
-    function appendLastSlash(url) {
-        var lastChar = url.substring(url.length - 1);
-        if (lastChar != "/") {
-            return url + "/";
-        }
-        return url;
-    }
-
-    function isSuccess(result) {
-        if (result == "SUCCESS") {
-          return true
-        }
-        return false;
-    }
-
-    function getIcon(result) {
-        var url = "images/blue.png";
-        if (result == "UNSTABLE") {
-            url = "images/yellow.png";
-        } else if (result == "FAILURE") {
-            url = "images/red.png";
-        } else if (result == "ABORTED") {
-            url = "images/grey.png";
-        }
-        return url;
-    }
-
-    function getColor(result) {
-        var color = [0, 0, 255, 200];
-        if (result == "UNSTABLE") {
-            color =  [255, 255, 0, 200];
-        } else if (result == "FAILURE") {
-            color = [255, 0, 0, 200];
-        } else if (result == "ABORTED") {
-            color = [200, 200, 200, 200];
-        }
-        return color;
-    }
-
+    jenkins.init();
+    
     // replace popup event
-    chrome.browserAction.setPopup({popup : ""});
-    chrome.browserAction.onClicked.addListener(function(tab) {
-        window.open(apiUrl + JOB + jobName);
-    });
+    //chrome.browserAction.setPopup({popup : ""});
+    //chrome.browserAction.onClicked.addListener(function(tab) {
+    //    window.open(jenkins.url);
+    //});
 
-    function fetch(apiUrl, num) {
-        if (num == null) {
-            num = BUILD_NUMBER;
-        }
-        var url = apiUrl + JOB + jobName + "/" + num + API_SUB;
-
-        $.getJSON(url, function(json, result) {
+    function fetch() {
+        $.getJSON(jenkins.apiUrl(), function(json, result) {
+            var currentTime = $.now();
             if (result != "success") {
                 return;
             }
-            if (prevBuild != json.number) {
-                if(notifyOnlyFail == 'true' && isSuccess(json.result)) {
-                    return;
+
+            var failedCount = 0;
+            var jobs = json['jobs'];
+
+            for (var i = 0; i < jobs.length; i++) {
+                if (jobs[i].builds[0].result == "FAILURE") {
+                    failedCount++;    
                 }
-                prevBuild = json.number;
-                chrome.browserAction.setBadgeText({text: String(json.number)});
-                chrome.browserAction.setBadgeBackgroundColor({color: getColor(json.result)});
-                var option = {
-                    type: 'basic',
-                    title: "#" + json.number + " (" + json.result + ")",
-                    message : json.actions[0].causes[0].shortDescription,
-                    iconUrl: getIcon(json.result)
+                
+                var jobTimeStamp = jobs[i]['lastCompletedBuild']['timestamp'];
+                if (lastTime < jobTimeStamp && jobTimeStamp < currentTime) {
+                    var build = jobs[i].builds[0];
+                    var option = {
+                        type: 'basic',
+                        title: build.fullDisplayName + " (" + build.result + ")",
+                        message : build.actions[0].causes[0].shortDescription,
+                        iconUrl: jenkins.getIcon(build.result)
+                    };
+                    chrome.notifications.create("", option, function (id) { /* Do nothing */ });
                 }
-                chrome.notifications.create("", option, function (id) { /* Do nothing */ });
             }
+            
+            console.log(jobs);
+            jobs.sort(function(a, b) {
+                return b['lastCompletedBuild']['timestamp'] - a['lastCompletedBuild']['timestamp'];
+            });
+
+            chrome.browserAction.setBadgeText({text: String(failedCount)});
+            chrome.browserAction.setBadgeBackgroundColor({color: jenkins.getColor("blue")});
         });
     }
 
     var retryTime = 2500;
-    function bind(wsUrl, apiUrl) {
-        var ws = $("<div />");
+    
+    fetch(); // first fetch
+    setInterval(function() {
+        fetch();
+    }, POLLING_TIME);
 
-        ws.bind("websocket::connect", function() {
-            console.log('opened connection');
-            retryTime = 5000;
-        });
-
-        ws.bind("websocket::message", function(_, obj) {
-            if (!!obj.result && obj.project == jobName) {
-                fetch(apiUrl, obj.number);
-            }
-        });
-
-        ws.bind("websocket::error", function() {
-            var option = {
-                type: 'basic',
-                title: "Failed to access to Jenkins Websocket Notifier. Please check your websocket URL",
-                text : wsUrl,
-                iconUrl: getIcon("FAILURE")
-            }
-            chrome.notifications.create("", option, function (id) { /* Do nothing */ });
-        });
-
-        // auto reconnect
-        ws.bind('websocket::close', function() {
-            console.log('closed connection');
-            retryTime *= 2;
-            setTimeout(function() {
-                bind(websocketUrl, apiUrl);
-            }, retryTime);
-        });
-
-        ws.webSocket({
-            entry : wsUrl
-        });
-    }
-
-    if (useWebsocket == 'true') {
-        bind(websocketUrl, apiUrl);
-    } else {
-        fetch(apiUrl, BUILD_NUMBER); // first fetch
-        setInterval(function() {
-            fetch(apiUrl, BUILD_NUMBER);
-        }, POLLING_TIME);
-    }
 });
