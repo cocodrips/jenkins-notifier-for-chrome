@@ -4,12 +4,13 @@ $(function(){
     jenkins.init();
     
     // replace popup event
-    //chrome.browserAction.setPopup({popup : ""});
-    //chrome.browserAction.onClicked.addListener(function(tab) {
-    //    window.open(jenkins.url);
-    //});
+    if (jenkins.url == "") {
+        chrome.browserAction.setPopup({popup : "options.html"});    
+        return;
+    }
 
     function fetch() {
+        console.log(jenkins.apiUrl());
         $.getJSON(jenkins.apiUrl(), function(json, result) {
             var currentTime = $.now();
             if (result != "success") {
@@ -19,14 +20,17 @@ $(function(){
             var failedCount = 0;
             var jobs = json['jobs'];
 
+            jobs = jenkins.fetchJobs(jobs);
+
             for (var i = 0; i < jobs.length; i++) {
-                if (jobs[i].builds[0].result == "FAILURE") {
+                if (jobs[i].lastCompletedBuild == null) continue;
+
+                var build = jobs[i].lastCompletedBuild
+                if (build.result == "FAILURE") {
                     failedCount++;    
                 }
-                
-                var jobTimeStamp = jobs[i]['lastCompletedBuild']['timestamp'];
-                if (lastTime < jobTimeStamp && jobTimeStamp < currentTime) {
-                    var build = jobs[i].builds[0];
+
+                if (lastTime < build.timestamp && build.timestamp < currentTime) {
                     var option = {
                         type: 'basic',
                         title: build.fullDisplayName + " (" + build.result + ")",
@@ -37,13 +41,15 @@ $(function(){
                 }
             }
             
-            console.log(jobs);
-            jobs.sort(function(a, b) {
-                return b['lastCompletedBuild']['timestamp'] - a['lastCompletedBuild']['timestamp'];
-            });
+            jobs = jenkins.sortJobs(jobs);
+            if (failedCount > 0) {
+                chrome.browserAction.setBadgeText({text: String(failedCount)});
+                chrome.browserAction.setBadgeBackgroundColor({color: jenkins.getColor("FAILURE")});
+            } else {
+                chrome.browserAction.setBadgeText({text: "Good"});
+                chrome.browserAction.setBadgeBackgroundColor({color: jenkins.getColor("SUCCESS")});
+            }
 
-            chrome.browserAction.setBadgeText({text: String(failedCount)});
-            chrome.browserAction.setBadgeBackgroundColor({color: jenkins.getColor("blue")});
         });
     }
 

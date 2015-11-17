@@ -22,14 +22,25 @@
                 <input name="jenkins-url" id="jenkins-url" class="text" placeholder="http://localhost:8080/jenkins" autofocus="true" />
               </div>
             </div>
+
             <div class="clearfix">
               <div class="left">
-                <label>Job name</label>
+                <label>Job name pattern (split space)</label>
               </div>
               <div class="right">
-                <input name="job-name" id="job-name" class="text" placeholder="jobname" />
+                <input name="job-name-ptn" id="job-name-ptn" class="text" placeholder="master_build build" />
               </div>
             </div>
+
+            <div class="clearfix">
+              <div class="left">
+                <label>View name (split space)</label>
+              </div>
+              <div class="right">
+                <input name="job-views" id="job-views" class="text" placeholder="master active" />
+              </div>
+            </div>
+
             <div class="clearfix">
               <div class="left">
                 <label>Notify Only Fail</label>
@@ -38,16 +49,25 @@
                 <input name="notify-only-fail" id="notify-only-fail" class="text" type="checkbox" />
               </div>
             </div>
+            
             <div class="clearfix">
               <div class="left">
-                <label>Websocket</label>
+                <label>Username</label>
               </div>
               <div class="right">
-                <input name="use-websocket" id="use-websocket" type="checkbox" /> Use<br />
-                <input name="websocket-url" id="websocket-url" class="text" placeholder="ws://localhost:8081/jenkins" /><br />
-                To use websocket, you need to install <a href="https://wiki.jenkins-ci.org/display/JENKINS/Websocket+Plugin">Jenkins Websocket Plugin</p>
+                <input name="username" id="username" class="text" placeholder="username" />
               </div>
             </div>
+
+            <div class="clearfix">
+              <div class="left">
+                <label>Password</label>
+              </div>
+              <div class="right">
+                <input name="password" id="password" class="text" type="password" />
+              </div>
+            </div>
+            
           </fieldset>
           <div class="buttons">
             <input value="Save" class="button save" type="submit" />
